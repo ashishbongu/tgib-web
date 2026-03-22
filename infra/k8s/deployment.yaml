@@ -1,0 +1,129 @@
+# infra/k8s/deployment.yaml
+# Kubernetes manifests for production deployment
+# Apply with: kubectl apply -f infra/k8s/
+
+---
+# ── Backend Deployment ─────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tgib-backend
+  labels:
+    app: tgib-backend
+spec:
+  replicas: 2                         # 2 pods for high availability
+  selector:
+    matchLabels:
+      app: tgib-backend
+  template:
+    metadata:
+      labels:
+        app: tgib-backend
+    spec:
+      containers:
+        - name: backend
+          image: your-registry/tgib-backend:latest   # replace with your image
+          ports:
+            - containerPort: 8000
+          env:
+            - name: TGIB_WEIGHTS
+              value: /app/tgib_weights.pkl
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+---
+# ── Backend Service ────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: tgib-backend-svc
+spec:
+  selector:
+    app: tgib-backend
+  ports:
+    - port: 8000
+      targetPort: 8000
+  type: ClusterIP
+
+---
+# ── Frontend Deployment ────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tgib-frontend
+  labels:
+    app: tgib-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tgib-frontend
+  template:
+    metadata:
+      labels:
+        app: tgib-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: your-registry/tgib-frontend:latest
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+
+---
+# ── Frontend Service (LoadBalancer = public IP) ────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: tgib-frontend-svc
+spec:
+  selector:
+    app: tgib-frontend
+  ports:
+    - port: 80
+      targetPort: 80
+  type: LoadBalancer            # exposes to internet on cloud providers
+
+---
+# ── Horizontal Pod Autoscaler (scales backend under load) ─────────────────
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: tgib-backend-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: tgib-backend
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60

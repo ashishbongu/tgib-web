@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>T-GIB — Paradigm Shift Ranker</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f4f6f9;
+      color: #1a1a2e;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: #1a1a2e;
+      color: white;
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    header h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.3px; }
+    header span { font-size: 0.85rem; color: #94a3b8; margin-left: 4px; }
+
+    /* ── Layout ── */
+    .container { max-width: 1100px; margin: 0 auto; padding: 28px 20px; }
+
+    /* ── Search ── */
+    .search-box {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      margin-bottom: 24px;
+    }
+    .search-box h2 { font-size: 1rem; color: #475569; margin-bottom: 14px; font-weight: 600; }
+    .search-row { display: flex; gap: 10px; }
+    .search-row input {
+      flex: 1;
+      padding: 11px 16px;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .search-row input:focus { border-color: #3b82f6; }
+    .search-row select {
+      padding: 11px 12px;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      background: white;
+      cursor: pointer;
+    }
+    .btn {
+      padding: 11px 22px;
+      background: #1a1a2e;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      white-space: nowrap;
+    }
+    .btn:hover { background: #16213e; }
+    .btn:disabled { background: #94a3b8; cursor: not-allowed; }
+    .btn-outline {
+      background: white;
+      color: #1a1a2e;
+      border: 1.5px solid #1a1a2e;
+    }
+    .btn-outline:hover { background: #f1f5f9; }
+
+    /* ── Stats bar ── */
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: white;
+      border-radius: 10px;
+      padding: 16px 20px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+      border-left: 4px solid #3b82f6;
+    }
+    .stat-card.red   { border-color: #ef4444; }
+    .stat-card.green { border-color: #22c55e; }
+    .stat-card.amber { border-color: #f59e0b; }
+    .stat-card p { font-size: 0.78rem; color: #64748b; text-transform: uppercase;
+                   letter-spacing: 0.5px; margin-bottom: 4px; }
+    .stat-card h3 { font-size: 1.6rem; font-weight: 700; }
+
+    /* ── Two-column layout ── */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 20px;
+      align-items: start;
+    }
+    @media (max-width: 840px) { .main-grid { grid-template-columns: 1fr; } }
+
+    /* ── Results ── */
+    .results-panel {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+      overflow: hidden;
+    }
+    .results-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #f1f5f9;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .results-header h2 { font-size: 1rem; font-weight: 700; }
+    .badge {
+      background: #eff6ff;
+      color: #3b82f6;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+
+    .paper-card {
+      padding: 16px 20px;
+      border-bottom: 1px solid #f8fafc;
+      cursor: pointer;
+      transition: background 0.15s;
+      display: grid;
+      grid-template-columns: 32px 1fr auto;
+      gap: 12px;
+      align-items: start;
+    }
+    .paper-card:hover { background: #f8fafc; }
+    .paper-card:last-child { border-bottom: none; }
+
+    .rank-badge {
+      width: 28px; height: 28px;
+      background: #1a1a2e;
+      color: white;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.78rem; font-weight: 700;
+      flex-shrink: 0;
+    }
+    .rank-badge.top3 { background: #ef4444; }
+
+    .paper-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #1e293b;
+      margin-bottom: 4px;
+      line-height: 1.4;
+    }
+    .paper-meta {
+      font-size: 0.78rem;
+      color: #64748b;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .paper-meta span { display: flex; align-items: center; gap: 3px; }
+
+    .score-pill {
+      background: #fef2f2;
+      color: #dc2626;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .score-bar-wrap { margin-top: 6px; }
+    .score-bar {
+      height: 3px;
+      background: #f1f5f9;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .score-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #3b82f6, #ef4444);
+      border-radius: 2px;
+      transition: width 0.6s ease;
+    }
+
+    /* ── Side panel ── */
+    .side-panel { display: flex; flex-direction: column; gap: 18px; }
+    .chart-card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    .chart-card h3 {
+      font-size: 0.9rem;
+      font-weight: 700;
+      margin-bottom: 14px;
+      color: #1e293b;
+    }
+
+    /* ── Loading ── */
+    .loading {
+      text-align: center;
+      padding: 48px 20px;
+      color: #64748b;
+    }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid #e2e8f0;
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto 14px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .empty {
+      text-align: center;
+      padding: 48px 20px;
+      color: #94a3b8;
+    }
+    .empty h3 { font-size: 1rem; margin-bottom: 6px; }
+    .empty p  { font-size: 0.85rem; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed;
+      bottom: 24px; right: 24px;
+      background: #1e293b;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+      z-index: 999;
+    }
+    #toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>T-GIB <span>Paradigm Shift Ranker</span></h1>
+  </div>
+  <div style="margin-left:auto;font-size:0.82rem;color:#94a3b8;">
+    Temporal Graph Information Bottleneck
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Search -->
+  <div class="search-box">
+    <h2>Find paradigm-shifting research</h2>
+    <div class="search-row">
+      <input id="yearFrom" type="number" value="2013"
+             style="width:90px;padding:11px 10px;border:1.5px solid #e2e8f0;
+                    border-radius:8px;font-size:0.9rem;" />
+      <input id="yearTo" type="number" value="2020"
+             style="width:90px;padding:11px 10px;border:1.5px solid #e2e8f0;
+                    border-radius:8px;font-size:0.9rem;" />
+      <input id="queryInput" type="text"
+             placeholder="e.g. attention mechanism, graph neural networks, diffusion models…"
+             value="graph neural networks" />
+      <select id="topKSelect">
+        <option value="10">Top 10</option>
+        <option value="20" selected>Top 20</option>
+        <option value="50">Top 50</option>
+      </select>
+      <button class="btn" id="searchBtn" onclick="search()">
+        Rank Papers
+      </button>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-bar" id="statsBar" style="display:none">
+    <div class="stat-card red">
+      <p>Papers ranked</p>
+      <h3 id="statTotal">—</h3>
+    </div>
+    <div class="stat-card">
+      <p>Top paper score</p>
+      <h3 id="statTopScore">—</h3>
+    </div>
+    <div class="stat-card green">
+      <p>Peak velocity</p>
+      <h3 id="statPeakV">—</h3>
+    </div>
+    <div class="stat-card amber">
+      <p>Year range</p>
+      <h3 id="statYears">—</h3>
+    </div>
+  </div>
+
+  <!-- Main grid -->
+  <div class="main-grid">
+
+    <!-- Results -->
+    <div class="results-panel">
+      <div class="results-header">
+        <h2>Ranked Results</h2>
+        <span class="badge" id="resultsBadge">waiting</span>
+      </div>
+      <div id="resultsBody">
+        <div class="empty">
+          <h3>Enter a topic above</h3>
+          <p>T-GIB will rank papers by innovation velocity,<br>
+             surfacing paradigm-shifters before they go mainstream.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Side panel -->
+    <div class="side-panel">
+
+      <div class="chart-card">
+        <h3>📈 Innovation Velocity by Year</h3>
+        <canvas id="velocityChart" height="180"></canvas>
+      </div>
+
+      <div class="chart-card">
+        <h3>📊 Score Distribution</h3>
+        <canvas id="scoreChart" height="160"></canvas>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = 'http://localhost:8000/api/v1';
+
+let velocityChartInst = null;
+let scoreChartInst    = null;
+
+// ── Search ────────────────────────────────────────────────────────────────
+async function search() {
+  const query = document.getElementById('queryInput').value.trim();
+  const topK  = parseInt(document.getElementById('topKSelect').value);
+  if (!query) { showToast('Please enter a search query.'); return; }
+
+  setLoading(true);
+
+  const yearFrom = parseInt(document.getElementById('yearFrom').value) || 2013;
+  const yearTo   = parseInt(document.getElementById('yearTo').value)   || 2020;
+
+  try {
+    const res = await fetch(`${API}/search`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, top_k: topK,
+        year_from: yearFrom, year_to: yearTo }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'API error');
+    }
+
+    const data = await res.json();
+    renderResults(data.results);
+    renderStats(data.results);
+    renderCharts(data.results);
+    document.getElementById('resultsBadge').textContent =
+      `${data.total} papers`;
+
+  } catch (e) {
+    showToast(`Error: ${e.message}`);
+    setLoading(false);
+  }
+}
+
+// ── Render results ────────────────────────────────────────────────────────
+function renderResults(papers) {
+  const body = document.getElementById('resultsBody');
+  if (!papers.length) {
+    body.innerHTML = '<div class="empty"><h3>No results</h3></div>';
+    return;
+  }
+
+  body.innerHTML = papers.map(p => `
+    <div class="paper-card">
+      <div class="rank-badge ${p.rank <= 3 ? 'top3' : ''}">${p.rank}</div>
+      <div>
+        <div class="paper-title">${escHtml(p.title)}</div>
+        <div class="paper-meta">
+          <span>📅 ${p.year}</span>
+          <span>📄 ${p.citations} citations</span>
+          ${p.venue ? `<span>🏛 ${escHtml(p.venue)}</span>` : ''}
+          <span style="color:#ef4444;font-weight:600">
+            ⚡ V=${p.velocity.toFixed(3)}
+          </span>
+        </div>
+        <div class="score-bar-wrap">
+          <div class="score-bar">
+            <div class="score-bar-fill"
+                 style="width:${(p.score * 100).toFixed(1)}%"></div>
+          </div>
+        </div>
+      </div>
+      <div class="score-pill">${p.score.toFixed(3)}</div>
+    </div>
+  `).join('');
+
+  setLoading(false);
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────
+function renderStats(papers) {
+  document.getElementById('statsBar').style.display = 'grid';
+  const topScore  = Math.max(...papers.map(p => p.score));
+  const peakV     = Math.max(...papers.map(p => p.velocity));
+  const years     = papers.map(p => p.year);
+  document.getElementById('statTotal').textContent     = papers.length;
+  document.getElementById('statTopScore').textContent  = topScore.toFixed(3);
+  document.getElementById('statPeakV').textContent     = peakV.toFixed(3);
+  document.getElementById('statYears').textContent     =
+    `${Math.min(...years)}–${Math.max(...years)}`;
+}
+
+// ── Charts ────────────────────────────────────────────────────────────────
+function renderCharts(papers) {
+  // Velocity by year
+  const byYear = {};
+  papers.forEach(p => {
+    if (!byYear[p.year]) byYear[p.year] = [];
+    byYear[p.year].push(p.velocity);
+  });
+  const sortedYears = Object.keys(byYear).map(Number).sort();
+  const meanV = sortedYears.map(y =>
+    byYear[y].reduce((a,b) => a+b, 0) / byYear[y].length
+  );
+
+  if (velocityChartInst) velocityChartInst.destroy();
+  velocityChartInst = new Chart(
+    document.getElementById('velocityChart'),
+    {
+      type: 'line',
+      data: {
+        labels: sortedYears,
+        datasets: [{
+          label: 'Mean Velocity',
+          data: meanV,
+          borderColor: '#ef4444',
+          backgroundColor: 'rgba(239,68,68,0.1)',
+          borderWidth: 2,
+          pointRadius: 4,
+          fill: true,
+          tension: 0.3,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: '#f1f5f9' } },
+          y: { grid: { color: '#f1f5f9' }, beginAtZero: true }
+        }
+      }
+    }
+  );
+
+  // Score histogram
+  const buckets = 8;
+  const scores  = papers.map(p => p.score);
+  const min = Math.min(...scores), max = Math.max(...scores);
+  const step = (max - min) / buckets || 0.1;
+  const counts = Array(buckets).fill(0);
+  scores.forEach(s => {
+    const i = Math.min(Math.floor((s - min) / step), buckets - 1);
+    counts[i]++;
+  });
+  const labels = counts.map((_, i) => (min + i * step).toFixed(2));
+
+  if (scoreChartInst) scoreChartInst.destroy();
+  scoreChartInst = new Chart(
+    document.getElementById('scoreChart'),
+    {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Papers',
+          data: counts,
+          backgroundColor: 'rgba(59,130,246,0.7)',
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false },
+               ticks: { maxTicksLimit: 5 } },
+          y: { grid: { color: '#f1f5f9' }, beginAtZero: true }
+        }
+      }
+    }
+  );
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function setLoading(on) {
+  const body = document.getElementById('resultsBody');
+  const btn  = document.getElementById('searchBtn');
+  btn.disabled = on;
+  if (on) {
+    body.innerHTML = `
+      <div class="loading">
+        <div class="spinner"></div>
+        <p>Running T-GIB ranking…</p>
+      </div>`;
+  }
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Enter key triggers search
+document.getElementById('queryInput')
+  .addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+</script>
+</body>
+</html>

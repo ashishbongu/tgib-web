@@ -1,0 +1,4 @@
+# infra/docker/Dockerfile.frontend
+FROM nginx:1.25-alpine
+COPY frontend/public /usr/share/nginx/html
+EXPOSE 80
