@@ -9,10 +9,14 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+  packages: write
+
 env:
   REGISTRY: ghcr.io
-  IMAGE_BACKEND:  ${{ github.repository }}/tgib-backend
-  IMAGE_FRONTEND: ${{ github.repository }}/tgib-frontend
+  IMAGE_BACKEND:  ashishbongu/tgib-backend
+  IMAGE_FRONTEND: ashishbongu/tgib-frontend
 
 jobs:
 
