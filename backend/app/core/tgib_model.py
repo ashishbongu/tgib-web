@@ -35,7 +35,10 @@ class TGNNEncoder:
                              for nb in nbs])
             at  = softmax(np.atleast_1d((Hn @ self.Wa).squeeze()))
             h   = 0.5 * h + 0.5 * (at[:, None] * Hn).sum(0)
+        out = relu(h @ self.W2 + self.b2)
+        # Add neighbourhood-size signal so velocity reflects structural change
         return relu(h @ self.W2 + self.b2).astype(np.float32)
+        return out.astype(np.float32)
 
 
 class InformationBottleneck:
@@ -161,16 +164,42 @@ class TGIBModel:
 
             pub = np.where(years <= yr)[0]
             for node in pub:
-                H_v  = self.encoder.encode(node, adj_yr, feats)
-                mu   = self.ib.get_latent(H_v)
-                Z_final[node] = mu
-                if node in H_prev:
-                    V_all[node] = float(np.linalg.norm(mu - H_prev[node]))
-                H_prev[node] = mu.copy()
+                # Use TGNN embedding directly as the structural signal
+                # This captures real neighbourhood change year over year
+                H_v = self.encoder.encode(node, adj_yr, feats)
 
-        # Composite score
-        S = self.alpha * V_all + (1 - self.alpha) * np.log1p(cites)
-        S = S / (S.max() + 1e-9)
+                # Normalise so magnitude differences don't dominate
+                norm = np.linalg.norm(H_v) + 1e-9
+                H_norm = H_v / norm
+
+                Z_final[node] = H_norm
+
+                if node in H_prev:
+                    # Cosine distance — measures structural direction change
+                    # not just magnitude, so new citations matter more
+                    cos_sim = float(np.dot(H_norm, H_prev[node]) /
+                                    (np.linalg.norm(H_norm) *
+                                    np.linalg.norm(H_prev[node]) + 1e-9))
+                    # Convert to distance: 0 = same, 2 = opposite
+                    v = 1.0 - cos_sim
+                    V_all[node] = max(V_all[node], v)
+
+                H_prev[node] = H_norm.copy()
+
+        V_norm = V_all / (V_all.max() + 1e-9)
+        C_norm = np.log1p(cites)
+        C_norm = C_norm / (C_norm.max() + 1e-9)
+
+        # Velocity 75%, citations 25%
+        # Papers need at least 1 citation AND some velocity to rank high
+        has_citations = (cites > 0).astype(float)
+        S = (0.75 * V_norm + 0.25 * C_norm) * has_citations
+
+        # Penalise papers published in last year (2020) — not enough time
+        # for their velocity to be meaningful
+        last_year = years.max()
+        recency_penalty = np.where(years == last_year, 0.5, 1.0)
+        S = S * recency_penalty
 
         # Build result
         ranked_idx = np.argsort(S)[::-1][:top_k]

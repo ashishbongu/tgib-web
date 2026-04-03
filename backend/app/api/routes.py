@@ -72,10 +72,46 @@ async def search_and_rank(req: SearchRequest):
 
     # Filter by year range and sample 200 papers around the query
     import random
+    all_papers, all_edges = load_ogb_papers()
+
+    # Filter by year
+    # Year filter FIRST — always strict
     papers = [p for p in all_papers
             if req.year_from <= p["year"] <= req.year_to]
+
+    # Then query filter
+    query_clean = req.query.strip().lower()
+    if query_clean and query_clean not in [".", ""]:
+        words = [w for w in query_clean.split() if len(w) > 2]
+        if words:
+            def score_paper(p):
+                text = (p.get("title","") + " " +
+                        p.get("abstract","") + " " +
+                        p.get("venue","")).lower()
+                return sum(1 for w in words if w in text)
+
+            matched = [p for p in papers if score_paper(p) > 0]
+
+            if len(matched) >= 3:
+                # sort by keyword relevance first, then pass to T-GIB
+                matched.sort(key=score_paper, reverse=True)
+                papers = matched[:200]   # top 200 keyword matches go to T-GIB
+
+    # If no title matches, fall back to all papers in year range
+    if len(papers) == 0:
+        # fallback: ignore year range, search all papers
+        papers = all_papers
+        query_clean = req.query.strip().lower()
+        words = [w for w in query_clean.split() if len(w) > 2]
+        if words:
+            matched = [p for p in papers
+                    if any(w in (p.get("title","") + " " +
+                                    p.get("abstract","")).lower()
+                            for w in words)]
+            if matched:
+                papers = matched
     
-    papers = random.sample(papers, min(200, len(papers)))
+    papers = papers
 
     # Count citations from edges
     from collections import defaultdict
@@ -105,9 +141,11 @@ async def search_and_rank(req: SearchRequest):
     papers = [p for p in papers
               if req.year_from <= p["year"] <= req.year_to]
 
-    if not papers:
-        raise HTTPException(status_code=404,
-                             detail="No papers in the given year range.")
+    # if not papers:
+    #     raise HTTPException(status_code=404,
+    #                          detail=f"No papers found for: {req.query}")
+
+    
 
     edges  = build_citation_edges(papers)
     model  = get_model()

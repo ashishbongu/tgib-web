@@ -1,0 +1,9 @@
+ogb_raw/
+ogb_arxiv_papers.json
+arxiv-metadata-oai-snapshot.json
+arxiv.zip
+.venv/
+__pycache__/
+*.pyc
+*.pkl
+*.gz

@@ -270,10 +270,10 @@
   <div class="search-box">
     <h2>Find paradigm-shifting research</h2>
     <div class="search-row">
-      <input id="yearFrom" type="number" value="2013"
+      <input id="yearFrom" type="number" value="2007"
              style="width:90px;padding:11px 10px;border:1.5px solid #e2e8f0;
                     border-radius:8px;font-size:0.9rem;" />
-      <input id="yearTo" type="number" value="2020"
+      <input id="yearTo" type="number" value="2023"
              style="width:90px;padding:11px 10px;border:1.5px solid #e2e8f0;
                     border-radius:8px;font-size:0.9rem;" />
       <input id="queryInput" type="text"
@@ -332,12 +332,17 @@
     <div class="side-panel">
 
       <div class="chart-card">
-        <h3>📈 Innovation Velocity by Year</h3>
+        <h3>Innovation Velocity by Year</h3>
         <canvas id="velocityChart" height="180"></canvas>
+        </div>
+
+        <div class="chart-card">
+        <h3>Mean Citations by Year</h3>
+        <canvas id="citationChart" height="180"></canvas>
       </div>
 
       <div class="chart-card">
-        <h3>📊 Score Distribution</h3>
+        <h3>Score Distribution</h3>
         <canvas id="scoreChart" height="160"></canvas>
       </div>
 
@@ -403,12 +408,18 @@ function renderResults(papers) {
       <div class="rank-badge ${p.rank <= 3 ? 'top3' : ''}">${p.rank}</div>
       <div>
         <div class="paper-title">${escHtml(p.title)}</div>
+        ${p.abstract ? `<div style="font-size:0.78rem;color:#475569;
+            margin-top:4px;line-height:1.5;
+            display:-webkit-box;-webkit-line-clamp:2;
+            -webkit-box-orient:vertical;overflow:hidden;">
+            ${escHtml(p.abstract)}
+        </div>` : ''}
         <div class="paper-meta">
           <span>📅 ${p.year}</span>
           <span>📄 ${p.citations} citations</span>
           ${p.venue ? `<span>🏛 ${escHtml(p.venue)}</span>` : ''}
           <span style="color:#ef4444;font-weight:600">
-            ⚡ V=${p.velocity.toFixed(3)}
+              V=${p.velocity.toFixed(3)}
           </span>
         </div>
         <div class="score-bar-wrap">
@@ -434,8 +445,9 @@ function renderStats(papers) {
   document.getElementById('statTotal').textContent     = papers.length;
   document.getElementById('statTopScore').textContent  = topScore.toFixed(3);
   document.getElementById('statPeakV').textContent     = peakV.toFixed(3);
-  document.getElementById('statYears').textContent     =
-    `${Math.min(...years)}–${Math.max(...years)}`;
+  const yFrom = document.getElementById('yearFrom').value || 2013;
+  const yTo   = document.getElementById('yearTo').value   || 2020;
+  document.getElementById('statYears').textContent = `${yFrom}–${yTo}`;
 }
 
 // ── Charts ────────────────────────────────────────────────────────────────
@@ -516,6 +528,56 @@ function renderCharts(papers) {
         }
       }
     }
+  );
+
+    // Mean citations by year
+  const citByYear = {};
+  const citCount  = {};
+  papers.forEach(p => {
+      if (!citByYear[p.year]) { citByYear[p.year] = 0; citCount[p.year] = 0; }
+      citByYear[p.year] += p.citations;
+      citCount[p.year]  += 1;
+  });
+  const citYears   = Object.keys(citByYear).map(Number).sort();
+  const meanCit    = citYears.map(y =>
+      citCount[y] > 0 ? (citByYear[y] / citCount[y]).toFixed(1) : 0
+  );
+
+  if (window.citChartInst) window.citChartInst.destroy();
+  window.citChartInst = new Chart(
+      document.getElementById('citationChart'),
+      {
+          type: 'bar',
+          data: {
+              labels: citYears,
+              datasets: [{
+                  label: 'Mean Citations',
+                  data: meanCit,
+                  backgroundColor: 'rgba(59,130,246,0.7)',
+                  borderColor:     '#1d4ed8',
+                  borderWidth: 1,
+                  borderRadius: 4,
+              }]
+          },
+          options: {
+              responsive: true,
+              plugins: {
+                  legend: { display: false },
+                  tooltip: {
+                      callbacks: {
+                          label: ctx => `Mean citations: ${ctx.raw}`
+                      }
+                  }
+              },
+              scales: {
+                  x: { grid: { color: '#f1f5f9' },
+                      title: { display: true, text: 'Year' } },
+                  y: { grid: { color: '#f1f5f9' },
+                      beginAtZero: true,
+                      title: { display: true, text: 'Mean Citations' } }
+              }
+          }
+      }
   );
 }
 
