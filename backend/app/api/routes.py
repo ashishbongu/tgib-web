@@ -1,6 +1,8 @@
 # backend/app/api/routes.py
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
+
+from app.auth.deps import get_current_user
 
 from app.models.schemas import (
     RankRequest, RankResponse, RankedPaper,
@@ -37,7 +39,7 @@ def health():
 # ── Rank papers ───────────────────────────────────────────────────────────
 
 @router.post("/rank", response_model=RankResponse, tags=["ranking"])
-def rank_papers(req: RankRequest):
+def rank_papers(req: RankRequest, _: dict = Depends(get_current_user)):
     """
     Rank a list of papers by T-GIB innovation velocity score.
 
@@ -62,7 +64,7 @@ def rank_papers(req: RankRequest):
 # ── Search + auto-rank ────────────────────────────────────────────────────
 
 @router.post("/search", response_model=RankResponse, tags=["ranking"])
-async def search_and_rank(req: SearchRequest):
+async def search_and_rank(req: SearchRequest, _: dict = Depends(get_current_user)):
     """
     Search Semantic Scholar by query string, then rank results with T-GIB.
     Falls back to synthetic data when offline.
@@ -160,7 +162,7 @@ async def search_and_rank(req: SearchRequest):
 # ── Velocity timeseries ───────────────────────────────────────────────────
 
 @router.post("/velocity", response_model=VelocityResponse, tags=["analytics"])
-def velocity_timeseries(req: RankRequest):
+def velocity_timeseries(req: RankRequest, _: dict = Depends(get_current_user)):
     """
     Return year-by-year mean innovation velocity for a set of papers.
     Used to draw the timestamp velocity chart in the frontend.
@@ -184,7 +186,8 @@ def velocity_timeseries(req: RankRequest):
 @router.get("/paper/{paper_id}/velocity", tags=["analytics"])
 async def paper_velocity(
     paper_id: str,
-    query:    str = Query(..., description="Topic query to build context graph")
+    query:    str = Query(..., description="Topic query to build context graph"),
+    _:        dict = Depends(get_current_user),
 ):
     """
     Return the velocity timeseries for a single paper identified by ID.

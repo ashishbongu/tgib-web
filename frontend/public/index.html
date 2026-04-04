@@ -251,16 +251,90 @@
       z-index: 999;
     }
     #toast.show { opacity: 1; }
+
+    /* ── Auth modal ── */
+    #authOverlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.55);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000;
+    }
+    #authOverlay.hidden { display: none; }
+    .auth-card {
+      background: white;
+      border-radius: 14px;
+      padding: 36px 32px;
+      width: 360px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    }
+    .auth-card h2 { font-size: 1.3rem; font-weight: 700; margin-bottom: 6px; }
+    .auth-card p  { font-size: 0.85rem; color: #64748b; margin-bottom: 22px; }
+    .auth-field   { margin-bottom: 14px; }
+    .auth-field label {
+      display: block; font-size: 0.82rem; font-weight: 600;
+      color: #475569; margin-bottom: 5px;
+    }
+    .auth-field input {
+      width: 100%; padding: 10px 14px;
+      border: 1.5px solid #e2e8f0; border-radius: 8px;
+      font-size: 0.95rem; outline: none; transition: border-color 0.2s;
+    }
+    .auth-field input:focus { border-color: #3b82f6; }
+    .auth-submit {
+      width: 100%; margin-top: 6px;
+      padding: 11px; background: #1a1a2e;
+      color: white; border: none; border-radius: 8px;
+      font-size: 0.95rem; font-weight: 600; cursor: pointer;
+    }
+    .auth-submit:hover { background: #16213e; }
+    .auth-toggle {
+      text-align: center; margin-top: 16px;
+      font-size: 0.83rem; color: #64748b;
+    }
+    .auth-toggle a { color: #3b82f6; cursor: pointer; text-decoration: underline; }
+    .auth-error {
+      background: #fef2f2; color: #dc2626;
+      border-radius: 7px; padding: 9px 12px;
+      font-size: 0.83rem; margin-bottom: 12px; display: none;
+    }
   </style>
 </head>
 <body>
+
+<!-- Auth modal -->
+<div id="authOverlay">
+  <div class="auth-card">
+    <h2 id="authTitle">Sign in</h2>
+    <p id="authSubtitle">Access the T-GIB Paradigm Shift Ranker</p>
+    <div class="auth-error" id="authError"></div>
+    <div class="auth-field">
+      <label for="authUsername">Username</label>
+      <input id="authUsername" type="text" placeholder="your-username" autocomplete="username" />
+    </div>
+    <div class="auth-field">
+      <label for="authPassword">Password</label>
+      <input id="authPassword" type="password" placeholder="••••••••" autocomplete="current-password" />
+    </div>
+    <button class="auth-submit" id="authSubmitBtn" onclick="authSubmit()">Sign in</button>
+    <div class="auth-toggle">
+      <span id="authToggleText">Don't have an account?</span>
+      <a onclick="toggleAuthMode()">Register</a>
+    </div>
+  </div>
+</div>
 
 <header>
   <div>
     <h1>T-GIB <span>Paradigm Shift Ranker</span></h1>
   </div>
-  <div style="margin-left:auto;font-size:0.82rem;color:#94a3b8;">
-    Temporal Graph Information Bottleneck
+  <div style="margin-left:auto;display:flex;align-items:center;gap:14px;">
+    <span style="font-size:0.82rem;color:#94a3b8;">
+      Temporal Graph Information Bottleneck
+    </span>
+    <span id="headerUser" style="font-size:0.82rem;color:#94a3b8;display:none;"></span>
+    <button id="logoutBtn" class="btn btn-outline"
+            style="display:none;padding:6px 14px;font-size:0.82rem;"
+            onclick="logout()">Logout</button>
   </div>
 </header>
 
@@ -357,6 +431,117 @@ const API = 'http://localhost:8000/api/v1';
 
 let velocityChartInst = null;
 let scoreChartInst    = null;
+let _authMode = 'login'; // 'login' | 'register'
+
+// ── Auth ──────────────────────────────────────────────────────────────────
+function getToken() { return localStorage.getItem('tgib_token'); }
+function getUsername() { return localStorage.getItem('tgib_user'); }
+
+function setSession(token, username) {
+  localStorage.setItem('tgib_token', token);
+  localStorage.setItem('tgib_user', username);
+  document.getElementById('authOverlay').classList.add('hidden');
+  document.getElementById('headerUser').textContent = username;
+  document.getElementById('headerUser').style.display = '';
+  document.getElementById('logoutBtn').style.display = '';
+}
+
+function logout() {
+  localStorage.removeItem('tgib_token');
+  localStorage.removeItem('tgib_user');
+  document.getElementById('headerUser').style.display = 'none';
+  document.getElementById('logoutBtn').style.display = 'none';
+  document.getElementById('authOverlay').classList.remove('hidden');
+  document.getElementById('authUsername').value = '';
+  document.getElementById('authPassword').value = '';
+  document.getElementById('authError').style.display = 'none';
+}
+
+function toggleAuthMode() {
+  _authMode = _authMode === 'login' ? 'register' : 'login';
+  const isLogin = _authMode === 'login';
+  document.getElementById('authTitle').textContent       = isLogin ? 'Sign in' : 'Create account';
+  document.getElementById('authSubtitle').textContent    = isLogin
+    ? 'Access the T-GIB Paradigm Shift Ranker'
+    : 'Register a new account';
+  document.getElementById('authSubmitBtn').textContent   = isLogin ? 'Sign in' : 'Register';
+  document.getElementById('authToggleText').textContent  = isLogin
+    ? "Don't have an account?" : 'Already have an account?';
+  const link = document.querySelector('.auth-toggle a');
+  link.textContent = isLogin ? 'Register' : 'Sign in';
+  document.getElementById('authError').style.display = 'none';
+}
+
+async function authSubmit() {
+  const username = document.getElementById('authUsername').value.trim();
+  const password = document.getElementById('authPassword').value;
+  const errEl    = document.getElementById('authError');
+  errEl.style.display = 'none';
+
+  if (!username || !password) {
+    errEl.textContent = 'Please fill in all fields.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  try {
+    if (_authMode === 'register') {
+      const res = await fetch(`${API}/auth/register`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ username, password }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || 'Registration failed.');
+      }
+      // Auto-login after register
+      _authMode = 'login';
+    }
+
+    // Login (form-encoded per OAuth2 spec)
+    const form = new URLSearchParams();
+    form.append('username', username);
+    form.append('password', password);
+    const res = await fetch(`${API}/auth/token`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body:    form,
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.detail || 'Login failed.');
+    }
+    const { access_token } = await res.json();
+    setSession(access_token, username);
+
+  } catch (e) {
+    errEl.textContent    = e.message;
+    errEl.style.display  = 'block';
+  }
+}
+
+function authHeaders() {
+  return {
+    'Content-Type':  'application/json',
+    'Authorization': `Bearer ${getToken()}`,
+  };
+}
+
+// Check existing session on load
+window.addEventListener('DOMContentLoaded', () => {
+  const token = getToken();
+  const user  = getUsername();
+  if (token && user) {
+    document.getElementById('authOverlay').classList.add('hidden');
+    document.getElementById('headerUser').textContent = user;
+    document.getElementById('headerUser').style.display = '';
+    document.getElementById('logoutBtn').style.display = '';
+  }
+  // Enter key on password field submits
+  document.getElementById('authPassword')
+    .addEventListener('keydown', e => { if (e.key === 'Enter') authSubmit(); });
+});
 
 // ── Search ────────────────────────────────────────────────────────────────
 async function search() {
@@ -372,12 +557,13 @@ async function search() {
   try {
     const res = await fetch(`${API}/search`, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders(),
       body: JSON.stringify({ query, top_k: topK,
         year_from: yearFrom, year_to: yearTo }),
     });
 
     if (!res.ok) {
+      if (res.status === 401) throw new Error('401');
       const err = await res.json();
       throw new Error(err.detail || 'API error');
     }
@@ -390,6 +576,7 @@ async function search() {
       `${data.total} papers`;
 
   } catch (e) {
+    if (e.message === '401') { logout(); return; }
     showToast(`Error: ${e.message}`);
     setLoading(false);
   }
