@@ -72,3 +72,13 @@ class SearchRequest(BaseModel):
 class ErrorResponse(BaseModel):
     detail: str
     code:   int
+
+
+class UserCreate(BaseModel):
+    username: str
+    password: str
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type:   str

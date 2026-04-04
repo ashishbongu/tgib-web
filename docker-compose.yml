@@ -27,7 +27,7 @@ services:
       dockerfile: infra/docker/Dockerfile.frontend
     container_name: tgib-frontend
     ports:
-      - "3000:80"
+    - "3001:80"
     depends_on:
       - backend
     restart: unless-stopped
