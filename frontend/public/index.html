@@ -317,7 +317,7 @@
     </div>
     <button class="auth-submit" id="authSubmitBtn" onclick="authSubmit()">Sign in</button>
     <div class="auth-toggle">
-      <span id="authToggleText">Don't have an account?</span>
+      <span id="authToggleText">Don't have account?</span>
       <a onclick="toggleAuthMode()">Register</a>
     </div>
   </div>
@@ -482,7 +482,7 @@ function toggleAuthMode() {
     : 'Register a new account';
   document.getElementById('authSubmitBtn').textContent   = isLogin ? 'Sign in' : 'Register';
   document.getElementById('authToggleText').textContent  = isLogin
-    ? "Don't have account?" : 'Already have an account?';
+    ? "Don't have an account?" : 'Already have an account?';
   const link = document.querySelector('.auth-toggle a');
   link.textContent = isLogin ? 'Register' : 'Sign in';
   document.getElementById('authError').style.display = 'none';
