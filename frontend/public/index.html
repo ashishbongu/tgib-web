@@ -427,7 +427,23 @@
 <div id="toast"></div>
 
 <script>
-const API = 'http://localhost:8000/api/v1';
+function resolveApiBase() {
+  const metaApi = document.querySelector('meta[name="tgib-api-base"]')?.content?.trim();
+  if (metaApi) return metaApi.replace(/\/$/, '');
+
+  const globalApi = window.TGIB_API_BASE?.trim();
+  if (globalApi) return globalApi.replace(/\/$/, '');
+
+  const { origin, hostname } = window.location;
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'http://localhost:8000/api/v1';
+  }
+
+  // In production, default to same-origin routing unless an explicit API base is provided.
+  return `${origin}/api/v1`;
+}
+
+const API = resolveApiBase();
 
 let velocityChartInst = null;
 let scoreChartInst    = null;
