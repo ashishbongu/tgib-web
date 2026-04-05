@@ -85,8 +85,9 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key:      ${{ secrets.SERVER_SSH_KEY }}
           script: |
-            cd /opt/tgib-web
+            cd /home/ubuntu/tgib-web
             git pull origin main
+            docker compose down
             docker compose pull
-            docker compose up -d --no-build
+            docker compose up -d --build
             docker system prune -f
