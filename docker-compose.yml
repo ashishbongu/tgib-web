@@ -26,6 +26,8 @@ services:
       context: .
       dockerfile: infra/docker/Dockerfile.frontend
     container_name: tgib-frontend
+    environment:
+      - TGIB_API_UPSTREAM=backend:8000
     ports:
     - "3001:80"
     depends_on:

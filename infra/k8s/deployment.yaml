@@ -85,6 +85,9 @@ spec:
           image: your-registry/tgib-frontend:latest
           ports:
             - containerPort: 80
+          env:
+            - name: TGIB_API_UPSTREAM
+              value: tgib-backend-svc:8000
           resources:
             requests:
               memory: "64Mi"

@@ -473,6 +473,35 @@ function logout() {
   document.getElementById('authError').style.display = 'none';
 }
 
+async function readResponseBody(res) {
+  const contentType = res.headers.get('content-type') || '';
+  const bodyText = await res.text();
+
+  if (!bodyText) return null;
+
+  if (contentType.includes('application/json')) {
+    try {
+      return JSON.parse(bodyText);
+    } catch {
+      throw new Error('The API returned invalid JSON.');
+    }
+  }
+
+  const isHtml = /<html[\s>]/i.test(bodyText);
+  if (isHtml) {
+    throw new Error('The API returned HTML instead of JSON. Check the frontend API proxy/base URL configuration.');
+  }
+
+  return bodyText;
+}
+
+async function getErrorMessage(res, fallbackMessage) {
+  const payload = await readResponseBody(res);
+  if (payload && typeof payload === 'object' && payload.detail) return payload.detail;
+  if (typeof payload === 'string' && payload.trim()) return payload.trim();
+  return fallbackMessage;
+}
+
 function toggleAuthMode() {
   _authMode = _authMode === 'login' ? 'register' : 'login';
   const isLogin = _authMode === 'login';
@@ -508,8 +537,7 @@ async function authSubmit() {
         body:    JSON.stringify({ username, password }),
       });
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.detail || 'Registration failed.');
+        throw new Error(await getErrorMessage(res, 'Registration failed.'));
       }
       // Auto-login after register
       _authMode = 'login';
@@ -525,10 +553,13 @@ async function authSubmit() {
       body:    form,
     });
     if (!res.ok) {
-      const data = await res.json();
-      throw new Error(data.detail || 'Login failed.');
+      throw new Error(await getErrorMessage(res, 'Login failed.'));
     }
-    const { access_token } = await res.json();
+    const data = await readResponseBody(res);
+    if (!data || typeof data !== 'object' || !data.access_token) {
+      throw new Error('Login failed: missing access token in API response.');
+    }
+    const { access_token } = data;
     setSession(access_token, username);
 
   } catch (e) {
@@ -580,11 +611,13 @@ async function search() {
 
     if (!res.ok) {
       if (res.status === 401) throw new Error('401');
-      const err = await res.json();
-      throw new Error(err.detail || 'API error');
+      throw new Error(await getErrorMessage(res, 'API error'));
     }
 
-    const data = await res.json();
+    const data = await readResponseBody(res);
+    if (!data || typeof data !== 'object') {
+      throw new Error('The API returned an invalid search response.');
+    }
     renderResults(data.results);
     renderStats(data.results);
     renderCharts(data.results);
