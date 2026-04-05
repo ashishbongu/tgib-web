@@ -3,9 +3,11 @@ import pytest
 from fastapi.testclient import TestClient
 import sys
 import os
+from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from app.main import app
+from app.services.data_service import load_ogb_papers
 
 client = TestClient(app)
 
@@ -63,3 +65,10 @@ def test_velocity_endpoint():
     assert len(ts) > 0
     assert "year" in ts[0]
     assert "mean_velocity" in ts[0]
+
+
+def test_load_ogb_papers_uses_repo_relative_path(monkeypatch):
+    monkeypatch.chdir(Path(__file__).resolve().parents[2])
+    papers, edges = load_ogb_papers()
+    assert len(papers) > 0
+    assert isinstance(edges, list)

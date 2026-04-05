@@ -9,6 +9,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source
 COPY backend/app ./app
+COPY backend/ogb_arxiv_papers.json ./ogb_arxiv_papers.json
 
 # Run
 EXPOSE 8000

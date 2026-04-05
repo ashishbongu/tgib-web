@@ -626,7 +626,10 @@ async function search() {
 
   } catch (e) {
     if (e.message === '401') { logout(); return; }
-    showToast(`Error: ${e.message}`);
+    const message = e instanceof TypeError
+      ? `Unable to reach the API at ${API}. Check that the backend is running and reachable.`
+      : e.message;
+    showToast(`Error: ${message}`);
     setLoading(false);
   }
 }

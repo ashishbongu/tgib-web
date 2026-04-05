@@ -1,25 +1,26 @@
 # backend/app/api/routes.py
-from fastapi import APIRouter, Depends, HTTPException, Query
+from collections import defaultdict
 from typing import Optional
 
-from app.auth.deps import get_current_user
+from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.models.schemas import (
-    RankRequest, RankResponse, RankedPaper,
-    VelocityResponse, VelocityPoint,
-    HealthResponse, SearchRequest
-)
-from app.services.data_service import (
-    fetch_papers_by_query, build_citation_edges
-)
+from app.auth.deps import get_current_user
 from app.core.tgib_model import TGIBModel
+from app.models.schemas import (
+    HealthResponse,
+    RankRequest,
+    RankResponse,
+    RankedPaper,
+    SearchRequest,
+    VelocityPoint,
+    VelocityResponse,
+)
+from app.services.data_service import build_citation_edges, fetch_papers_by_query
 
 router = APIRouter()
 
 # Single model instance (loaded once at startup)
 _model: Optional[TGIBModel] = None
-
-
 
 
 def get_model() -> TGIBModel:
@@ -29,148 +30,119 @@ def get_model() -> TGIBModel:
     return _model
 
 
-# ── Health ────────────────────────────────────────────────────────────────
-
 @router.get("/health", response_model=HealthResponse, tags=["system"])
 def health():
     return HealthResponse(status="ok", version="1.0.0", model="T-GIB")
 
 
-# ── Rank papers ───────────────────────────────────────────────────────────
-
 @router.post("/rank", response_model=RankResponse, tags=["ranking"])
 def rank_papers(req: RankRequest, _: dict = Depends(get_current_user)):
     """
     Rank a list of papers by T-GIB innovation velocity score.
-
-    Send papers with features + citation edges.
-    Returns top_k papers sorted by paradigm-shift score.
     """
     if len(req.papers) == 0:
         raise HTTPException(status_code=400, detail="No papers provided.")
 
-    model  = get_model()
+    model = get_model()
     papers = [p.model_dump() for p in req.papers]
-    edges  = [(e.src, e.dst, e.year) for e in req.edges]
-
+    edges = [(e.src, e.dst, e.year) for e in req.edges]
     ranked = model.rank(papers, edges, top_k=req.top_k)
 
     return RankResponse(
         results=[RankedPaper(**r) for r in ranked],
-        total=len(ranked)
+        total=len(ranked),
     )
 
-
-# ── Search + auto-rank ────────────────────────────────────────────────────
 
 @router.post("/search", response_model=RankResponse, tags=["ranking"])
 async def search_and_rank(req: SearchRequest, _: dict = Depends(get_current_user)):
     """
-    Search Semantic Scholar by query string, then rank results with T-GIB.
-    Falls back to synthetic data when offline.
+    Search the bundled paper corpus by query string, then rank results with T-GIB.
+    Falls back to synthetic data if the dataset file is unavailable.
     """
-    from app.services.data_service import load_ogb_papers
-    all_papers, all_edges = load_ogb_papers()
+    from app.services.data_service import _synthetic_papers, load_ogb_papers
 
-    # Filter by year range and sample 200 papers around the query
-    import random
-    all_papers, all_edges = load_ogb_papers()
+    try:
+        all_papers, all_edges = load_ogb_papers()
+    except FileNotFoundError:
+        all_papers = _synthetic_papers(req.query, max(req.top_k * 5, 50))
+        all_edges = []
 
-    # Filter by year
-    # Year filter FIRST — always strict
-    papers = [p for p in all_papers
-            if req.year_from <= p["year"] <= req.year_to]
+    papers = [
+        p for p in all_papers
+        if req.year_from <= p["year"] <= req.year_to
+    ]
 
-    # Then query filter
     query_clean = req.query.strip().lower()
-    if query_clean and query_clean not in [".", ""]:
+    if query_clean and query_clean != ".":
         words = [w for w in query_clean.split() if len(w) > 2]
         if words:
-            def score_paper(p):
-                text = (p.get("title","") + " " +
-                        p.get("abstract","") + " " +
-                        p.get("venue","")).lower()
+            def score_paper(paper):
+                text = (
+                    paper.get("title", "") + " " +
+                    paper.get("abstract", "") + " " +
+                    paper.get("venue", "")
+                ).lower()
                 return sum(1 for w in words if w in text)
 
             matched = [p for p in papers if score_paper(p) > 0]
-
             if len(matched) >= 3:
-                # sort by keyword relevance first, then pass to T-GIB
                 matched.sort(key=score_paper, reverse=True)
-                papers = matched[:200]   # top 200 keyword matches go to T-GIB
+                papers = matched[:200]
 
-    # If no title matches, fall back to all papers in year range
     if len(papers) == 0:
-        # fallback: ignore year range, search all papers
         papers = all_papers
-        query_clean = req.query.strip().lower()
         words = [w for w in query_clean.split() if len(w) > 2]
         if words:
-            matched = [p for p in papers
-                    if any(w in (p.get("title","") + " " +
-                                    p.get("abstract","")).lower()
-                            for w in words)]
+            matched = [
+                p for p in papers
+                if any(
+                    w in (p.get("title", "") + " " + p.get("abstract", "")).lower()
+                    for w in words
+                )
+            ]
             if matched:
                 papers = matched
-    
-    papers = papers
-
-    # Count citations from edges
-    from collections import defaultdict
-    cite_counter = defaultdict(int)
-    for e in all_edges:
-        cite_counter[str(e["dst"])] += 1
-
-    for p in papers:
-        if p["citations"] == 0:          # only override if not already set
-            p["citations"] = cite_counter.get(p["id"], 0)
-
-    # Get corresponding edges
-    paper_ids = {p["id"] for p in papers}
-    idx_map   = {p["id"]: i for i, p in enumerate(papers)}
-    edges = []
-    for e in all_edges:
-        s, d = str(e["src"]), str(e["dst"])
-        if s in paper_ids and d in paper_ids:
-            edges.append({"src": idx_map[s], "dst": idx_map[d],
-                        "year": e["year"]})
 
     if not papers:
-        raise HTTPException(status_code=404,
-                             detail=f"No papers found for: {req.query}")
+        raise HTTPException(status_code=404, detail=f"No papers found for: {req.query}")
 
-    # Filter by year range
-    papers = [p for p in papers
-              if req.year_from <= p["year"] <= req.year_to]
+    papers = [
+        p for p in papers
+        if req.year_from <= p["year"] <= req.year_to
+    ]
+    if not papers:
+        raise HTTPException(status_code=404, detail=f"No papers found for: {req.query}")
 
-    # if not papers:
-    #     raise HTTPException(status_code=404,
-    #                          detail=f"No papers found for: {req.query}")
+    cite_counter = defaultdict(int)
+    for edge in all_edges:
+        cite_counter[str(edge["dst"])] += 1
 
-    
+    hydrated_papers = []
+    for paper in papers:
+        hydrated = paper.copy()
+        if hydrated["citations"] == 0:
+            hydrated["citations"] = cite_counter.get(str(hydrated["id"]), 0)
+        hydrated_papers.append(hydrated)
 
-    edges  = build_citation_edges(papers)
-    model  = get_model()
-    ranked = model.rank(papers, edges, top_k=req.top_k)
+    edges = build_citation_edges(hydrated_papers)
+    model = get_model()
+    ranked = model.rank(hydrated_papers, edges, top_k=req.top_k)
 
     return RankResponse(
         results=[RankedPaper(**r) for r in ranked],
-        total=len(ranked)
+        total=len(ranked),
     )
 
-
-# ── Velocity timeseries ───────────────────────────────────────────────────
 
 @router.post("/velocity", response_model=VelocityResponse, tags=["analytics"])
 def velocity_timeseries(req: RankRequest, _: dict = Depends(get_current_user)):
     """
     Return year-by-year mean innovation velocity for a set of papers.
-    Used to draw the timestamp velocity chart in the frontend.
     """
-    model  = get_model()
+    model = get_model()
     papers = [p.model_dump() for p in req.papers]
-    edges  = [(e.src, e.dst, e.year) for e in req.edges]
-
+    edges = [(e.src, e.dst, e.year) for e in req.edges]
     ts = model.velocity_timeseries(papers, edges)
 
     return VelocityResponse(
@@ -181,28 +153,27 @@ def velocity_timeseries(req: RankRequest, _: dict = Depends(get_current_user)):
     )
 
 
-# ── Single paper velocity ─────────────────────────────────────────────────
-
 @router.get("/paper/{paper_id}/velocity", tags=["analytics"])
 async def paper_velocity(
     paper_id: str,
-    query:    str = Query(..., description="Topic query to build context graph"),
-    _:        dict = Depends(get_current_user),
+    query: str = Query(..., description="Topic query to build context graph"),
+    _: dict = Depends(get_current_user),
 ):
     """
     Return the velocity timeseries for a single paper identified by ID.
-    Builds context by fetching related papers from Semantic Scholar.
     """
     papers = await fetch_papers_by_query(query, limit=30)
     target = next((p for p in papers if p["id"] == paper_id), None)
 
     if not target:
-        raise HTTPException(status_code=404,
-                             detail=f"Paper {paper_id} not found.")
+        raise HTTPException(status_code=404, detail=f"Paper {paper_id} not found.")
 
-    edges  = build_citation_edges(papers)
-    model  = get_model()
-    ts     = model.velocity_timeseries(papers, edges)
+    edges = build_citation_edges(papers)
+    model = get_model()
+    ts = model.velocity_timeseries(papers, edges)
 
-    return {"paper_id": paper_id, "title": target["title"],
-            "timeseries": ts}
+    return {
+        "paper_id": paper_id,
+        "title": target["title"],
+        "timeseries": ts,
+    }

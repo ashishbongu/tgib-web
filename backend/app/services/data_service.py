@@ -1,12 +1,13 @@
 # backend/app/services/data_service.py
 """
 Fetches papers from Semantic Scholar API.
-Falls back to synthetic OGB-Arxiv data when offline.
+Falls back to local OGB-Arxiv data or synthetic data when offline.
 """
 
 import os
 import json
 import hashlib
+from pathlib import Path
 import numpy as np
 import httpx
 from typing import List, Dict, Tuple, Optional
@@ -18,12 +19,17 @@ _OGB_CACHE = None
 
 SEMANTIC_SCHOLAR_API = "https://api.semanticscholar.org/graph/v1"
 FIELDS = "paperId,title,year,citationCount,abstract,authors,venue,references"
+_DEFAULT_OGB_PATH = Path(__file__).resolve().parents[2] / "ogb_arxiv_papers.json"
 
-def load_ogb_papers(path="ogb_arxiv_papers.json"):
+
+def load_ogb_papers(path: Optional[str] = None):
     global _OGB_CACHE
+    dataset_path = Path(path) if path else _DEFAULT_OGB_PATH
+
     if _OGB_CACHE is None:
-        with open(path) as f:
+        with dataset_path.open(encoding="utf-8") as f:
             _OGB_CACHE = json.load(f)
+
     return _OGB_CACHE["papers"], _OGB_CACHE["edges"]
 
 
