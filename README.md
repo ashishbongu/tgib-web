@@ -5,6 +5,17 @@ using the Temporal Graph Information Bottleneck (T-GIB) framework.
 
 ---
 
+## Team Members
+
+| Name | Roll Number | GitHub |
+| :--- | :--- | :--- |
+| BONGU ASHISH | 23BDS014 | [@ashishbongu](https://github.com/ashishbongu) |
+| TARAN JAIN | 23BDS062 | [@Taranjain](https://github.com/Taranjain) |
+| YASH BIRJE | 23BDS070 | [@Yash-Birje](https://github.com/Yash-Birje) |
+| C SAI ARAVIND | 23BDS075 | [@comet-web](https://github.com/comet-web) |
+
+---
+
 ## Project Structure
 
 ```
