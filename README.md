@@ -143,9 +143,9 @@ curl -X POST http://localhost:8000/api/v1/rank \
 
 ---
 
-## Cloud Deployment (AWS / GCP / Azure)
+## Cloud Deployment (AWS)
 
-### Step 1 — Deploy to any cloud VM
+### Step 1 — Deploy to cloud VM
 
 ```bash
 # On your cloud VM (Ubuntu 22.04)
