@@ -1,3 +1,7 @@
+
+
+https://github.com/user-attachments/assets/5e03c66a-f227-41d7-95e9-0e0028a1e844
+
 # T-GIB Web — Paradigm Shift Ranker
 
 A full-stack web application that surfaces paradigm-shifting research papers
@@ -211,3 +215,10 @@ kubectl get service tgib-frontend-svc
 - **Orchestration:** Kubernetes
 - **CI/CD:** GitHub Actions
 - **Data source:** Semantic Scholar API (falls back to synthetic data offline)
+
+
+
+
+https://github.com/user-attachments/assets/ad5761d3-b68c-4ae9-bafa-8ca0fff1b201
+
+
