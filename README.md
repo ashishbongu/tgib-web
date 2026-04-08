@@ -1,6 +1,5 @@
 
 
-https://github.com/user-attachments/assets/5e03c66a-f227-41d7-95e9-0e0028a1e844
 
 # T-GIB Web — Paradigm Shift Ranker
 
